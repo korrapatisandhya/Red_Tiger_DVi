@@ -1,0 +1,39 @@
+{
+  "Name": "RedTiger",
+  "Vendor": "DVI",
+  "Game_Prefix": "RTG_",
+  "Game_Codes": [
+    "RTG_HTML5_AncientScript",
+    "RTG_HTML5_GoldenOffer",
+    "RTG_HTML5_ArcadeBomb",
+    "RTG_HTML5_DragonsFire",
+    "RTG_HTML5_ElvenMagic"
+
+  ],
+  "PlayerRegulation": 2,
+
+   "Vendor_URI":"/RedTiger/",
+   "Auth_URI":"auth",
+   "Stake_URI":"stake",
+   "Payout_URI":"payout",
+   "Refund_URI":"refund",
+
+
+  "Debit_Amount": [
+    100,
+    500,
+    200,
+    400,
+    300
+  ],
+  "Credit_Amount": [
+    1500,
+    2500,
+    3000,
+    3500,
+    2000
+  ],
+  "Username":"RedTiger",
+  "Password":"RedTiger123!"
+
+}

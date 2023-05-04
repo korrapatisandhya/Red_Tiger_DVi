@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>report.html</title>
+    <style>body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 12px;
+  /* do not increase min-width as some may use split screens */
+  min-width: 800px;
+  color: #999;
+}
+
+h1 {
+  font-size: 24px;
+  color: black;
+}
+
+h2 {
+  font-size: 16px;
+  color: black;
+}
+
+p {
+  color: black;
+}
+
+a {
+  color: #999;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+#environment td {
+  padding: 5px;
+  border: 1px solid #E6E6E6;
+}
+#environment tr:nth-child(odd) {
+  background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed,
+.passed .col-result {
+  color: green;
+}
+
+span.skipped,
+span.xfailed,
+span.rerun,
+.skipped .col-result,
+.xfailed .col-result,
+.rerun .col-result {
+  color: orange;
+}
+
+span.error,
+span.failed,
+span.xpassed,
+.error .col-result,
+.failed .col-result,
+.xpassed .col-result {
+  color: red;
+}
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+#results-table {
+  border: 1px solid #e6e6e6;
+  color: #999;
+  font-size: 12px;
+  width: 100%;
+}
+#results-table th,
+#results-table td {
+  padding: 5px;
+  border: 1px solid #E6E6E6;
+  text-align: left;
+}
+#results-table th {
+  font-weight: bold;
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+.log {
+  background-color: #e6e6e6;
+  border: 1px solid #e6e6e6;
+  color: black;
+  display: block;
+  font-family: "Courier New", Courier, monospace;
+  height: 230px;
+  overflow-y: scroll;
+  padding: 5px;
+  white-space: pre-wrap;
+}
+.log:only-child {
+  height: inherit;
+}
+
+div.image {
+  border: 1px solid #e6e6e6;
+  float: right;
+  height: 240px;
+  margin-left: 5px;
+  overflow: hidden;
+  width: 320px;
+}
+div.image img {
+  width: 320px;
+}
+
+div.video {
+  border: 1px solid #e6e6e6;
+  float: right;
+  height: 240px;
+  margin-left: 5px;
+  overflow: hidden;
+  width: 320px;
+}
+div.video video {
+  overflow: hidden;
+  width: 320px;
+  height: 240px;
+}
+
+.collapsed {
+  display: none;
+}
+
+.expander::after {
+  content: " (show details)";
+  color: #BBB;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.collapser::after {
+  content: " (hide details)";
+  color: #BBB;
+  font-style: italic;
+  cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+  cursor: pointer;
+}
+
+.sort-icon {
+  font-size: 0px;
+  float: left;
+  margin-right: 5px;
+  margin-top: 5px;
+  /*triangle*/
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+}
+.inactive .sort-icon {
+  /*finish triangle*/
+  border-top: 8px solid #E6E6E6;
+}
+.asc.active .sort-icon {
+  /*finish triangle*/
+  border-bottom: 8px solid #999;
+}
+.desc.active .sort-icon {
+  /*finish triangle*/
+  border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    let visibleString = getQueryParameter('visible') || 'all';
+    visibleString = visibleString.toLowerCase();
+    const checkedItems = visibleString.split(',');
+
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++) {
+        filterItems[i].hidden = false;
+
+        if (visibleString != 'all') {
+            filterItems[i].checked = checkedItems.includes(filterItems[i].getAttribute('data-test-result'));
+            filterTable(filterItems[i]);
+        }
+    }
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 02-May-2023 at 18:35:22 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\java\jdk-17</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "pytest": "7.3.1"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19045-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"allure-pytest": "2.13.1", "check": "2.1.4", "html": "3.2.0", "html-reporter": "0.2.9", "metadata": "2.0.4", "parallel": "0.1.1", "xdist": "3.2.1"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.11</td></tr></table>
+    <h2>Summary</h2>
+    <p>3 tests ran in 14.49 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">3 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">RedTiger.py::test_Multiple_Debit_Cancel_VendorDVI[RTG_HTML5_AncientScript-Debit0-Credit0-RedTiger-RedTiger123!-1]</td>
+          <td class="col-duration">13.39</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw2] win32 -- Python 3.10.11 C:\Users\sandhya.rani\PycharmProjects\RTG_DVI\venv\Scripts\python.exe<br/>[gw2] win32 -- Python 3.10.11 C:\Users\sandhya.rani\PycharmProjects\RTG_DVI\venv\Scripts\python.exe[gw2] win32 -- Python 3.10.11 C:\Users\sandhya.rani\PycharmProjects\RTG_DVI\venv\Scripts\python.exe[gw2] win32 -- Python 3.10.11 C:\Users\sandhya.rani\PycharmProjects\RTG_DVI\venv\Scripts\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>(20453, &#x27;ta3&#x27;, &#x27;ta3&#x27;)
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Launch Game Successful
+Create Token Successful
+Authentication Successful
+Multiple Debit Successful
+Random Cancel Successful
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:Common_steps.py:29 GameLaunch Request: 
+{&#x27;GameCode&#x27;: &#x27;RTG_HTML5_AncientScript&#x27;, &#x27;PlayerId&#x27;: &#x27;20453&#x27;, &#x27;PlayerIP&#x27;: &#x27;31.13.216.156&#x27;, &#x27;CountryCode&#x27;: &#x27;GB&#x27;, &#x27;CurrencyCode&#x27;: &#x27;GBP&#x27;, &#x27;LanguageCode&#x27;: &#x27;en-US&#x27;, &#x27;Nickname&#x27;: &#x27;&#x27;, &#x27;HomeUrl&#x27;: &#x27;https://operator.hub.stage.pariplaygames.com/Redirections/HomeUrl&#x27;, &#x27;CashierUrl&#x27;: &#x27;http://operator.hub.stage.pariplaygames.com/Redirections/CashierUrl&#x27;, &#x27;Gender&#x27;: 2, &#x27;PlayerRegulation&#x27;: &#x27;1&#x27;, &#x27;HistoryUrl&#x27;: &#x27;http://operator.hub.stage.pariplaygames.com/Redirections/HistoryUrl&#x27;, &#x27;IpAddress&#x27;: &#x27;93.175.245.42&#x27;, &#x27;IsMobile&#x27;: False, &#x27;DebugMode&#x27;: False, &#x27;IsNewWindow&#x27;: False, &#x27;MiniGame&#x27;: False, &#x27;Account&#x27;: {&#x27;UserName&#x27;: &#x27;t&#x27;, &#x27;Password&#x27;: &#x27;t&#x27;}}
+
+INFO     root:Common_steps.py:30 
+------------------------------
+
+INFO     root:Common_steps.py:31 GameLaunch Response: 
+{&#x27;Token&#x27;: &#x27;C132462770984DFB8EF7AEAB43040B4F&#x27;, &#x27;Url&#x27;: &#x27;https://hubgames.stage.pariplaygames.com/Games?url=https%3a%2f%2fgrt.stage.pariplaygames.com%2f%3furl%3dhttps%253a%252f%252fgserver-pp-aspire-dev.dopamine-gaming.com%252fpp-aspire%252flauncher%252fAncientScript%253flobbyUrl%253dhttps%25253a%25252f%25252foperator.hub.stage.pariplaygames.com%25252fRedirections%25252fHomeUrl%2526depositURL%253dhttp%25253a%25252f%25252foperator.hub.stage.pariplaygames.com%25252fRedirections%25252fCashierUrl%2526channel%253dmobile%2526casino%253dPPT%2526token%253dPPT_RTG-FS_735107066BE34EE7A2412ED4571680F0%2526lang%253den-us%2526playMode%253dreal%26token%3dPPT_RTG-FS_735107066BE34EE7A2412ED4571680F0%26vendorCode%3dRTG%26operatorId%3d2%26playerId%3d20453%26regulationTypeId%3d2%26regulationLimits%3d%26regulationSelfTest%3d%26regulationSelfExclusion%3d%26realityCheckInterval%3d%26loggedInTime%3d%26responsibleGamingUrl%3d%26homeUrl%3dhttps%253a%252f%252foperator.hub.stage.pariplaygames.com%252fRedirections%252fHomeUrl%26historyUrl%3dhttp%253a%252f%252foperator.hub.stage.pariplaygames.com%252fRedirections%252fHistoryUrl%26hideMobile%3dFalse%26hideDesktop%3dFalse%26hideSessionNetLoss%3dFalse%26hideSessionTimer%3dFalse%26gamecode%3dRTG_HTML5_AncientScript%26lang%3den-US%26currencyCode%3dGBP%26cashierurl%3dhttp%253a%252f%252foperator.hub.stage.pariplaygames.com%252fRedirections%252fCashierUrl%26IsAlderney%3dFalse%26removeFullScreenDivOnMobile%3dFalse%26tournamentId%3d%26tournamentType%3d%26wheelId%3d%26operatorCode%3dPPT%26gameName%3dAncient+Script%26regulationTaxId%3d%26grt%3dtrue&amp;operator_id=2&amp;vendor_id=49&amp;game_id=19514&amp;token=PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;}
+
+INFO     root:Common_steps.py:32 
+------------------------------
+
+INFO     root:Common_steps.py:33 GameLaunch Status: 
+200
+INFO     root:Common_steps.py:34 
+------------------------------
+
+INFO     root:Common_steps.py:29 CreateToken Request: 
+{&#x27;Token&#x27;: &#x27;C132462770984DFB8EF7AEAB43040B4F&#x27;, &#x27;PlayerId&#x27;: &#x27;20453&#x27;, &#x27;GameCode&#x27;: &#x27;RTG_HTML5_AncientScript&#x27;, &#x27;Account&#x27;: {&#x27;UserName&#x27;: &#x27;ta3&#x27;, &#x27;Password&#x27;: &#x27;ta3&#x27;}}
+
+INFO     root:Common_steps.py:30 
+------------------------------
+
+INFO     root:Common_steps.py:31 CreateToken Response: 
+{&#x27;Error&#x27;: None, &#x27;Timestamp&#x27;: None, &#x27;Message&#x27;: None, &#x27;DebitFundsSource&#x27;: None, &#x27;MessageContent&#x27;: None, &#x27;RawRequest&#x27;: None, &#x27;RawResponse&#x27;: None, &#x27;RequstUrl&#x27;: None, &#x27;RequestHeaders&#x27;: None}
+
+INFO     root:Common_steps.py:32 
+------------------------------
+
+INFO     root:Common_steps.py:33 CreateToken Status: 
+200
+INFO     root:Common_steps.py:34 
+------------------------------
+
+INFO     root:game_steps.py:22 Authenticate Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;userId&#x27;: &#x27;20451&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;ip&#x27;: &#x27;3113216156&#x27;, &#x27;channel&#x27;: &#x27;mobile&#x27;, &#x27;affiliate&#x27;: &#x27;&#x27;}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Authenticate Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;userId&#x27;: &#x27;PPT_20453&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;country&#x27;: &#x27;GB&#x27;, &#x27;language&#x27;: &#x27;en-US&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;1028638.06&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Authenticate Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------
+
+INFO     root:game_steps.py:22 Stake Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;userId&#x27;: &#x27;20453&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;transaction&#x27;: {&#x27;id&#x27;: &#x27;44P78ziC72aKM&#x27;, &#x27;stake&#x27;: 200}, &#x27;round&#x27;: {&#x27;id&#x27;: 1683032711, &#x27;starts&#x27;: True, &#x27;ends&#x27;: False}, &#x27;game&#x27;: {&#x27;type&#x27;: &#x27;lines&#x27;}}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Stake Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;id&#x27;: &#x27;44P78ziC72aKM&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;stake&#x27;: {&#x27;cash&#x27;: &#x27;200.00&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;1028638.06&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;messages&#x27;: None}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Stake Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------
+
+INFO     root:game_steps.py:22 Stake Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;userId&#x27;: &#x27;20453&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;transaction&#x27;: {&#x27;id&#x27;: &#x27;KNExMEc2pmZ6T&#x27;, &#x27;stake&#x27;: 400}, &#x27;round&#x27;: {&#x27;id&#x27;: 1683032714, &#x27;starts&#x27;: True, &#x27;ends&#x27;: False}, &#x27;game&#x27;: {&#x27;type&#x27;: &#x27;lines&#x27;}}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Stake Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;id&#x27;: &#x27;KNExMEc2pmZ6T&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;stake&#x27;: {&#x27;cash&#x27;: &#x27;400.00&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;1028238.06&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;messages&#x27;: None}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Stake Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------
+
+INFO     root:game_steps.py:22 Stake Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;userId&#x27;: &#x27;20453&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;transaction&#x27;: {&#x27;id&#x27;: &#x27;CTm4MqHBfA5zq&#x27;, &#x27;stake&#x27;: 400}, &#x27;round&#x27;: {&#x27;id&#x27;: 1683032715, &#x27;starts&#x27;: True, &#x27;ends&#x27;: False}, &#x27;game&#x27;: {&#x27;type&#x27;: &#x27;lines&#x27;}}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Stake Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;id&#x27;: &#x27;CTm4MqHBfA5zq&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;stake&#x27;: {&#x27;cash&#x27;: &#x27;400.00&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;1027838.06&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;messages&#x27;: None}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Stake Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------
+
+INFO     root:game_steps.py:22 Stake Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;userId&#x27;: &#x27;20453&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;transaction&#x27;: {&#x27;id&#x27;: &#x27;4VD5h4tMU6GZJ&#x27;, &#x27;stake&#x27;: 100}, &#x27;round&#x27;: {&#x27;id&#x27;: 1683032717, &#x27;starts&#x27;: True, &#x27;ends&#x27;: False}, &#x27;game&#x27;: {&#x27;type&#x27;: &#x27;lines&#x27;}}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Stake Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;id&#x27;: &#x27;4VD5h4tMU6GZJ&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;stake&#x27;: {&#x27;cash&#x27;: &#x27;100.00&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;1027738.06&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;messages&#x27;: None}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Stake Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------
+
+INFO     root:game_steps.py:22 Stake Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;userId&#x27;: &#x27;20453&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;transaction&#x27;: {&#x27;id&#x27;: &#x27;CLawAjPv923Ph&#x27;, &#x27;stake&#x27;: 500}, &#x27;round&#x27;: {&#x27;id&#x27;: 1683032719, &#x27;starts&#x27;: True, &#x27;ends&#x27;: False}, &#x27;game&#x27;: {&#x27;type&#x27;: &#x27;lines&#x27;}}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Stake Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;id&#x27;: &#x27;CLawAjPv923Ph&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;stake&#x27;: {&#x27;cash&#x27;: &#x27;500.00&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;1027238.06&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;messages&#x27;: None}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Stake Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------
+
+INFO     root:game_steps.py:22 Refund Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;userId&#x27;: &#x27;20453&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;transaction&#x27;: {&#x27;id&#x27;: &#x27;CLawAjPv923Ph&#x27;, &#x27;stake&#x27;: &#x27;100.00&#x27;}, &#x27;round&#x27;: {&#x27;id&#x27;: 1683032717, &#x27;starts&#x27;: False, &#x27;ends&#x27;: True}, &#x27;game&#x27;: {&#x27;type&#x27;: &#x27;lines&#x27;}}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Refund Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_735107066BE34EE7A2412ED4571680F0&#x27;, &#x27;id&#x27;: &#x27;CLawAjPv923Ph&#x27;, &#x27;stake&#x27;: {&#x27;cash&#x27;: &#x27;100.00&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;1027738.06&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Refund Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">RedTiger.py::test_Debit_Credit_VendorDVI[RTG_HTML5_AncientScript-Debit0-Credit0-RedTiger-RedTiger123!-1]</td>
+          <td class="col-duration">6.23</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw0] win32 -- Python 3.10.11 C:\Users\sandhya.rani\PycharmProjects\RTG_DVI\venv\Scripts\python.exe<br/>[gw0] win32 -- Python 3.10.11 C:\Users\sandhya.rani\PycharmProjects\RTG_DVI\venv\Scripts\python.exe[gw0] win32 -- Python 3.10.11 C:\Users\sandhya.rani\PycharmProjects\RTG_DVI\venv\Scripts\python.exe[gw0] win32 -- Python 3.10.11 C:\Users\sandhya.rani\PycharmProjects\RTG_DVI\venv\Scripts\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>(20451, &#x27;ta1&#x27;, &#x27;ta1&#x27;)
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Launch Game Successful
+Create Token Successful
+Authentication Successful
+Debit Successful
+Credit Successful
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:Common_steps.py:29 GameLaunch Request: 
+{&#x27;GameCode&#x27;: &#x27;RTG_HTML5_AncientScript&#x27;, &#x27;PlayerId&#x27;: &#x27;20451&#x27;, &#x27;PlayerIP&#x27;: &#x27;31.13.216.156&#x27;, &#x27;CountryCode&#x27;: &#x27;GB&#x27;, &#x27;CurrencyCode&#x27;: &#x27;GBP&#x27;, &#x27;LanguageCode&#x27;: &#x27;en-US&#x27;, &#x27;Nickname&#x27;: &#x27;&#x27;, &#x27;HomeUrl&#x27;: &#x27;https://operator.hub.stage.pariplaygames.com/Redirections/HomeUrl&#x27;, &#x27;CashierUrl&#x27;: &#x27;http://operator.hub.stage.pariplaygames.com/Redirections/CashierUrl&#x27;, &#x27;Gender&#x27;: 2, &#x27;PlayerRegulation&#x27;: &#x27;1&#x27;, &#x27;HistoryUrl&#x27;: &#x27;http://operator.hub.stage.pariplaygames.com/Redirections/HistoryUrl&#x27;, &#x27;IpAddress&#x27;: &#x27;93.175.245.42&#x27;, &#x27;IsMobile&#x27;: False, &#x27;DebugMode&#x27;: False, &#x27;IsNewWindow&#x27;: False, &#x27;MiniGame&#x27;: False, &#x27;Account&#x27;: {&#x27;UserName&#x27;: &#x27;t&#x27;, &#x27;Password&#x27;: &#x27;t&#x27;}}
+
+INFO     root:Common_steps.py:30 
+------------------------------
+
+INFO     root:Common_steps.py:31 GameLaunch Response: 
+{&#x27;Token&#x27;: &#x27;CAFF962E447B4F778F6AE11AAA60911A&#x27;, &#x27;Url&#x27;: &#x27;https://hubgames.stage.pariplaygames.com/Games?url=https%3a%2f%2fgrt.stage.pariplaygames.com%2f%3furl%3dhttps%253a%252f%252fgserver-pp-aspire-dev.dopamine-gaming.com%252fpp-aspire%252flauncher%252fAncientScript%253flobbyUrl%253dhttps%25253a%25252f%25252foperator.hub.stage.pariplaygames.com%25252fRedirections%25252fHomeUrl%2526depositURL%253dhttp%25253a%25252f%25252foperator.hub.stage.pariplaygames.com%25252fRedirections%25252fCashierUrl%2526channel%253dmobile%2526casino%253dPPT%2526token%253dPPT_RTG-FS_593C39B986FB4E82B7C95D620B08CB96%2526lang%253den-us%2526playMode%253dreal%26token%3dPPT_RTG-FS_593C39B986FB4E82B7C95D620B08CB96%26vendorCode%3dRTG%26operatorId%3d2%26playerId%3d20451%26regulationTypeId%3d2%26regulationLimits%3d%26regulationSelfTest%3d%26regulationSelfExclusion%3d%26realityCheckInterval%3d%26loggedInTime%3d%26responsibleGamingUrl%3d%26homeUrl%3dhttps%253a%252f%252foperator.hub.stage.pariplaygames.com%252fRedirections%252fHomeUrl%26historyUrl%3dhttp%253a%252f%252foperator.hub.stage.pariplaygames.com%252fRedirections%252fHistoryUrl%26hideMobile%3dFalse%26hideDesktop%3dFalse%26hideSessionNetLoss%3dFalse%26hideSessionTimer%3dFalse%26gamecode%3dRTG_HTML5_AncientScript%26lang%3den-US%26currencyCode%3dGBP%26cashierurl%3dhttp%253a%252f%252foperator.hub.stage.pariplaygames.com%252fRedirections%252fCashierUrl%26IsAlderney%3dFalse%26removeFullScreenDivOnMobile%3dFalse%26tournamentId%3d%26tournamentType%3d%26wheelId%3d%26operatorCode%3dPPT%26gameName%3dAncient+Script%26regulationTaxId%3d%26grt%3dtrue&amp;operator_id=2&amp;vendor_id=49&amp;game_id=19514&amp;token=PPT_RTG-FS_593C39B986FB4E82B7C95D620B08CB96&#x27;}
+
+INFO     root:Common_steps.py:32 
+------------------------------
+
+INFO     root:Common_steps.py:33 GameLaunch Status: 
+200
+INFO     root:Common_steps.py:34 
+------------------------------
+
+INFO     root:Common_steps.py:29 CreateToken Request: 
+{&#x27;Token&#x27;: &#x27;CAFF962E447B4F778F6AE11AAA60911A&#x27;, &#x27;PlayerId&#x27;: &#x27;20451&#x27;, &#x27;GameCode&#x27;: &#x27;RTG_HTML5_AncientScript&#x27;, &#x27;Account&#x27;: {&#x27;UserName&#x27;: &#x27;ta1&#x27;, &#x27;Password&#x27;: &#x27;ta1&#x27;}}
+
+INFO     root:Common_steps.py:30 
+------------------------------
+
+INFO     root:Common_steps.py:31 CreateToken Response: 
+{&#x27;Error&#x27;: None, &#x27;Timestamp&#x27;: None, &#x27;Message&#x27;: None, &#x27;DebitFundsSource&#x27;: None, &#x27;MessageContent&#x27;: None, &#x27;RawRequest&#x27;: None, &#x27;RawResponse&#x27;: None, &#x27;RequstUrl&#x27;: None, &#x27;RequestHeaders&#x27;: None}
+
+INFO     root:Common_steps.py:32 
+------------------------------
+
+INFO     root:Common_steps.py:33 CreateToken Status: 
+200
+INFO     root:Common_steps.py:34 
+------------------------------
+
+INFO     root:game_steps.py:22 Authenticate Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_593C39B986FB4E82B7C95D620B08CB96&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;userId&#x27;: &#x27;20451&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;ip&#x27;: &#x27;3113216156&#x27;, &#x27;channel&#x27;: &#x27;mobile&#x27;, &#x27;affiliate&#x27;: &#x27;&#x27;}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Authenticate Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_593C39B986FB4E82B7C95D620B08CB96&#x27;, &#x27;userId&#x27;: &#x27;PPT_20451&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;country&#x27;: &#x27;GB&#x27;, &#x27;language&#x27;: &#x27;en-US&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;124364.41&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Authenticate Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------
+
+INFO     root:game_steps.py:22 Stake Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_593C39B986FB4E82B7C95D620B08CB96&#x27;, &#x27;userId&#x27;: &#x27;20451&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;transaction&#x27;: {&#x27;id&#x27;: &#x27;huaFLNzQE6HdU&#x27;, &#x27;stake&#x27;: 100}, &#x27;round&#x27;: {&#x27;id&#x27;: 1683032711, &#x27;starts&#x27;: True, &#x27;ends&#x27;: False}, &#x27;game&#x27;: {&#x27;type&#x27;: &#x27;lines&#x27;}}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Stake Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_593C39B986FB4E82B7C95D620B08CB96&#x27;, &#x27;id&#x27;: &#x27;huaFLNzQE6HdU&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;stake&#x27;: {&#x27;cash&#x27;: &#x27;100.00&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;124264.41&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;messages&#x27;: None}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Stake Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------
+
+INFO     root:game_steps.py:22 Payout Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_593C39B986FB4E82B7C95D620B08CB96&#x27;, &#x27;userId&#x27;: &#x27;20451&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;transaction&#x27;: {&#x27;id&#x27;: &#x27;T86mwMpg49aCE&#x27;, &#x27;payout&#x27;: 3500}, &#x27;round&#x27;: {&#x27;id&#x27;: 1683032711, &#x27;starts&#x27;: False, &#x27;ends&#x27;: True}, &#x27;game&#x27;: {&#x27;type&#x27;: &#x27;lines&#x27;}, &#x27;retry&#x27;: False}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Payout Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_593C39B986FB4E82B7C95D620B08CB96&#x27;, &#x27;id&#x27;: &#x27;T86mwMpg49aCE&#x27;, &#x27;payout&#x27;: {&#x27;cash&#x27;: &#x27;3500.00&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;127564.41&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Payout Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">RedTiger.py::test_Debit_Cancel_VendorDVI[RTG_HTML5_AncientScript-Debit0-Credit0-RedTiger-RedTiger123!-1]</td>
+          <td class="col-duration">5.76</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw1] win32 -- Python 3.10.11 C:\Users\sandhya.rani\PycharmProjects\RTG_DVI\venv\Scripts\python.exe<br/>[gw1] win32 -- Python 3.10.11 C:\Users\sandhya.rani\PycharmProjects\RTG_DVI\venv\Scripts\python.exe[gw1] win32 -- Python 3.10.11 C:\Users\sandhya.rani\PycharmProjects\RTG_DVI\venv\Scripts\python.exe[gw1] win32 -- Python 3.10.11 C:\Users\sandhya.rani\PycharmProjects\RTG_DVI\venv\Scripts\python.exe<br/> -----------------------------Captured stdout setup------------------------------ <br/>(20452, &#x27;ta2&#x27;, &#x27;ta2&#x27;)
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Launch Game Successful
+Create Token Successful
+Authentication Successful
+Debit Successful
+Cancel Successful
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:Common_steps.py:29 GameLaunch Request: 
+{&#x27;GameCode&#x27;: &#x27;RTG_HTML5_AncientScript&#x27;, &#x27;PlayerId&#x27;: &#x27;20452&#x27;, &#x27;PlayerIP&#x27;: &#x27;31.13.216.156&#x27;, &#x27;CountryCode&#x27;: &#x27;GB&#x27;, &#x27;CurrencyCode&#x27;: &#x27;GBP&#x27;, &#x27;LanguageCode&#x27;: &#x27;en-US&#x27;, &#x27;Nickname&#x27;: &#x27;&#x27;, &#x27;HomeUrl&#x27;: &#x27;https://operator.hub.stage.pariplaygames.com/Redirections/HomeUrl&#x27;, &#x27;CashierUrl&#x27;: &#x27;http://operator.hub.stage.pariplaygames.com/Redirections/CashierUrl&#x27;, &#x27;Gender&#x27;: 2, &#x27;PlayerRegulation&#x27;: &#x27;1&#x27;, &#x27;HistoryUrl&#x27;: &#x27;http://operator.hub.stage.pariplaygames.com/Redirections/HistoryUrl&#x27;, &#x27;IpAddress&#x27;: &#x27;93.175.245.42&#x27;, &#x27;IsMobile&#x27;: False, &#x27;DebugMode&#x27;: False, &#x27;IsNewWindow&#x27;: False, &#x27;MiniGame&#x27;: False, &#x27;Account&#x27;: {&#x27;UserName&#x27;: &#x27;t&#x27;, &#x27;Password&#x27;: &#x27;t&#x27;}}
+
+INFO     root:Common_steps.py:30 
+------------------------------
+
+INFO     root:Common_steps.py:31 GameLaunch Response: 
+{&#x27;Token&#x27;: &#x27;A28DC1B7F9FF43FAA9CC295E01D5BA27&#x27;, &#x27;Url&#x27;: &#x27;https://hubgames.stage.pariplaygames.com/Games?url=https%3a%2f%2fgrt.stage.pariplaygames.com%2f%3furl%3dhttps%253a%252f%252fgserver-pp-aspire-dev.dopamine-gaming.com%252fpp-aspire%252flauncher%252fAncientScript%253flobbyUrl%253dhttps%25253a%25252f%25252foperator.hub.stage.pariplaygames.com%25252fRedirections%25252fHomeUrl%2526depositURL%253dhttp%25253a%25252f%25252foperator.hub.stage.pariplaygames.com%25252fRedirections%25252fCashierUrl%2526channel%253dmobile%2526casino%253dPPT%2526token%253dPPT_RTG-FS_67899F1D541940BC9150D4020BD07E88%2526lang%253den-us%2526playMode%253dreal%26token%3dPPT_RTG-FS_67899F1D541940BC9150D4020BD07E88%26vendorCode%3dRTG%26operatorId%3d2%26playerId%3d20452%26regulationTypeId%3d2%26regulationLimits%3d%26regulationSelfTest%3d%26regulationSelfExclusion%3d%26realityCheckInterval%3d%26loggedInTime%3d%26responsibleGamingUrl%3d%26homeUrl%3dhttps%253a%252f%252foperator.hub.stage.pariplaygames.com%252fRedirections%252fHomeUrl%26historyUrl%3dhttp%253a%252f%252foperator.hub.stage.pariplaygames.com%252fRedirections%252fHistoryUrl%26hideMobile%3dFalse%26hideDesktop%3dFalse%26hideSessionNetLoss%3dFalse%26hideSessionTimer%3dFalse%26gamecode%3dRTG_HTML5_AncientScript%26lang%3den-US%26currencyCode%3dGBP%26cashierurl%3dhttp%253a%252f%252foperator.hub.stage.pariplaygames.com%252fRedirections%252fCashierUrl%26IsAlderney%3dFalse%26removeFullScreenDivOnMobile%3dFalse%26tournamentId%3d%26tournamentType%3d%26wheelId%3d%26operatorCode%3dPPT%26gameName%3dAncient+Script%26regulationTaxId%3d%26grt%3dtrue&amp;operator_id=2&amp;vendor_id=49&amp;game_id=19514&amp;token=PPT_RTG-FS_67899F1D541940BC9150D4020BD07E88&#x27;}
+
+INFO     root:Common_steps.py:32 
+------------------------------
+
+INFO     root:Common_steps.py:33 GameLaunch Status: 
+200
+INFO     root:Common_steps.py:34 
+------------------------------
+
+INFO     root:Common_steps.py:29 CreateToken Request: 
+{&#x27;Token&#x27;: &#x27;A28DC1B7F9FF43FAA9CC295E01D5BA27&#x27;, &#x27;PlayerId&#x27;: &#x27;20452&#x27;, &#x27;GameCode&#x27;: &#x27;RTG_HTML5_AncientScript&#x27;, &#x27;Account&#x27;: {&#x27;UserName&#x27;: &#x27;ta2&#x27;, &#x27;Password&#x27;: &#x27;ta2&#x27;}}
+
+INFO     root:Common_steps.py:30 
+------------------------------
+
+INFO     root:Common_steps.py:31 CreateToken Response: 
+{&#x27;Error&#x27;: None, &#x27;Timestamp&#x27;: None, &#x27;Message&#x27;: None, &#x27;DebitFundsSource&#x27;: None, &#x27;MessageContent&#x27;: None, &#x27;RawRequest&#x27;: None, &#x27;RawResponse&#x27;: None, &#x27;RequstUrl&#x27;: None, &#x27;RequestHeaders&#x27;: None}
+
+INFO     root:Common_steps.py:32 
+------------------------------
+
+INFO     root:Common_steps.py:33 CreateToken Status: 
+200
+INFO     root:Common_steps.py:34 
+------------------------------
+
+INFO     root:game_steps.py:22 Authenticate Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_67899F1D541940BC9150D4020BD07E88&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;userId&#x27;: &#x27;20451&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;ip&#x27;: &#x27;3113216156&#x27;, &#x27;channel&#x27;: &#x27;mobile&#x27;, &#x27;affiliate&#x27;: &#x27;&#x27;}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Authenticate Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_67899F1D541940BC9150D4020BD07E88&#x27;, &#x27;userId&#x27;: &#x27;PPT_20452&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;country&#x27;: &#x27;GB&#x27;, &#x27;language&#x27;: &#x27;en-US&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;4521204.79&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Authenticate Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------
+
+INFO     root:game_steps.py:22 Stake Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_67899F1D541940BC9150D4020BD07E88&#x27;, &#x27;userId&#x27;: &#x27;20452&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;transaction&#x27;: {&#x27;id&#x27;: &#x27;6KUuZ8kyyGSfu&#x27;, &#x27;stake&#x27;: 300}, &#x27;round&#x27;: {&#x27;id&#x27;: 1683032711, &#x27;starts&#x27;: True, &#x27;ends&#x27;: False}, &#x27;game&#x27;: {&#x27;type&#x27;: &#x27;lines&#x27;}}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Stake Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_67899F1D541940BC9150D4020BD07E88&#x27;, &#x27;id&#x27;: &#x27;6KUuZ8kyyGSfu&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;stake&#x27;: {&#x27;cash&#x27;: &#x27;300.00&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;4520904.79&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;messages&#x27;: None}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Stake Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------
+
+INFO     root:game_steps.py:22 Refund Request: 
+{&#x27;token&#x27;: &#x27;PPT_RTG-FS_67899F1D541940BC9150D4020BD07E88&#x27;, &#x27;userId&#x27;: &#x27;20452&#x27;, &#x27;casino&#x27;: &#x27;PPT&#x27;, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;transaction&#x27;: {&#x27;id&#x27;: &#x27;6KUuZ8kyyGSfu&#x27;, &#x27;stake&#x27;: &#x27;300.00&#x27;}, &#x27;round&#x27;: {&#x27;id&#x27;: 1683032711, &#x27;starts&#x27;: False, &#x27;ends&#x27;: True}, &#x27;game&#x27;: {&#x27;type&#x27;: &#x27;lines&#x27;}}
+
+INFO     root:game_steps.py:23 
+------------------------------
+
+INFO     root:game_steps.py:24 Refund Response: 
+{&#x27;success&#x27;: True, &#x27;result&#x27;: {&#x27;token&#x27;: &#x27;PPT_RTG-FS_67899F1D541940BC9150D4020BD07E88&#x27;, &#x27;id&#x27;: &#x27;6KUuZ8kyyGSfu&#x27;, &#x27;stake&#x27;: {&#x27;cash&#x27;: &#x27;300.00&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}, &#x27;currency&#x27;: &#x27;GBP&#x27;, &#x27;balance&#x27;: {&#x27;cash&#x27;: &#x27;4521204.79&#x27;, &#x27;bonus&#x27;: &#x27;0.00&#x27;}}, &#x27;error&#x27;: None}
+
+INFO     root:game_steps.py:25 
+------------------------------
+
+INFO     root:game_steps.py:26 Refund Status: 
+200
+INFO     root:game_steps.py:27 
+------------------------------<br/></div></td></tr></tbody></table></body></html>
